@@ -31,7 +31,7 @@ def run_game_once(players_list, end_mode=EndMode.official, suits=5,
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('player_name')
+    parser.add_argument('player_name', help='<player_name> or <player1_name>,<player2_name>')
     parser.add_argument('-t', '--times', default=1, type=int)
     parser.add_argument('-n', '--players', default=3, type=int)
     parser.add_argument('-c', '--allow-cheats', default=False, action='store_true')
@@ -41,7 +41,11 @@ def main():
     parser.add_argument('-g', '--target-score', default=None, type=int, nargs=2)
 
     args = parser.parse_args()
-    players_list = [getattr(players, args.player_name)] * args.players
+    
+    player_names = args.player_name.split(',')
+    players_list = ([getattr(players, pn) for pn in player_names] * args.players)
+    players_list = players_list[:args.players]
+
     if args.one_io_player:
         players_list.pop()
         players_list.append(players.make_io_player('Human Player'))
