@@ -4,9 +4,9 @@ from game import Card, Tokens, Rules
 from typing import NamedTuple, List, Tuple
 
 
-def naive2_player(state: None, log: List[NamedTuple], hands: List[List[Card]],
+def naive2_player(log: List[NamedTuple], hands: List[List[Card]],
                   rules: Rules, tokens: Tokens, slots: List[int],
-                  discard_pile: List[List[int]]) -> Tuple[None, NamedTuple]:
+                  discard_pile: List[List[int]]) -> Tuple:
     """
     Zvika and Ofer's naive player
     """
@@ -22,7 +22,7 @@ def naive2_player(state: None, log: List[NamedTuple], hands: List[List[Card]],
     # Its better to play than hint
     if hinted_cards:
         play_card = max(hinted_cards)
-        return state, Play.create(play_card), 'Play hinted card'
+        return Play.create(play_card), 'Play hinted card'
 
     # Its better to hint than discard
     if tokens.clues > 0:
@@ -52,11 +52,11 @@ def naive2_player(state: None, log: List[NamedTuple], hands: List[List[Card]],
                     clue = Clue.create(player, 'suit', suit)
                     clue_rank = slots[suit] + 1
             if clue:
-                return state, clue, 'Given actionable clue'
+                return clue, 'Given actionable clue'
 
     # Its better to discard then playing like an idiot
     if tokens.clues < rules.max_tokens.clues:
-        return state, Discard.create(min(my_card_ids)), 'Discard oldest card'
+        return Discard.create(min(my_card_ids)), 'Discard oldest card'
 
     # If all else fails, play like an idiot
-    return state, Play.create(max(my_card_ids)), 'Play like an idiot'
+    return Play.create(max(my_card_ids)), 'Play like an idiot'

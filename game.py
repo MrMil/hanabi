@@ -4,6 +4,7 @@ from collections import namedtuple
 from enum import Enum
 from typing import List, NamedTuple, Tuple
 from colors import color, strip_color
+import inspect
 
 
 class EndMode(Enum):
@@ -145,7 +146,7 @@ DEFAULT_RULES = Rules(max_tokens=Tokens(8, 4), cards_per_player=None, suits=5, r
 
 
 class Hanabi:
-    def __init__(self, players, rules=DEFAULT_RULES, deck=None, allow_cheats=False, end_mode=EndMode.official):
+    def __init__(self, players, rules=DEFAULT_RULES, deck=None, allow_cheats=False, end_mode=EndMode.official, ips=None):
         if rules.cards_per_player is None:
             rules = rules._replace(cards_per_player=5 if len(players) <= 3 else 4)
         self.players = players
@@ -155,6 +156,7 @@ class Hanabi:
         if not isinstance(end_mode, EndMode):
             end_mode = EndMode[end_mode]
         self.end_mode = end_mode
+        self.ips = ips # intergame player state
 
         self.current_player = None
 
@@ -169,14 +171,21 @@ class Hanabi:
         self.notes = []
         self.player_states = [None] * len(players)
 
+        if self.ips is None:
+            self.ips = [None] * len(self.players)
+
         self.final_player = None
         self.slots = [0] * self.rules.suits
         self.discard_pile = tuple([[0] * len(self.rules.ranks) for _ in range(self.rules.suits)])
 
     def run(self) -> int:
+        return (lambda x, _: x)(*self.run_and_return_ips())
+
+    def run_and_return_ips(self) -> int:
         if self.log:
             raise RuntimeError("run already done")
         self.deal_cards()
+
         while True:
             for i in self.iterate_players():
                 if isinstance(self.final_player, tuple):
@@ -185,11 +194,37 @@ class Hanabi:
                 if not self.allow_cheats:
                     hands[i] = [card.hidden() for card in hands[i]]
                 player = self.players[self.current_player]
-                self.player_states[i], move, note = player(self.player_states[i], self.log, hands, self.rules, self.tokens, self.slots, self.discard_pile)
+                move, note = self.invoke_player(hands)
                 self.notes.append(note)
                 self.resolve(tuple_to_move(move))
                 if self.is_game_over():
-                    return self.score
+                    return self.score, self.ips
+
+    def invoke_player(self, hands_masked):
+        possible_args = {"ips": self.ips[self.current_player],
+                         "state": self.player_states[self.current_player],
+                         "log": self.log,
+                         "hands": hands_masked,
+                         "rules": self.rules,
+                         "tokens": self.tokens,
+                         "slots": self.slots,
+                         "discard_pile": self.discard_pile}
+
+        player = self.players[self.current_player]
+
+        player_args = inspect.getfullargspec(player).args
+        args_list = []
+        
+        for argname in player_args:
+            args_list.append(possible_args[argname])
+        
+        player_action = ([None]*2 + list(player(*args_list)))[-4:]
+        
+        self.ips[self.current_player] = player_action[0]
+        self.player_states[self.current_player] = player_action[1]
+
+        return player_action[2:]
+
 
     @staticmethod
     def new_shuffled_deck(suits: int, ranks: List[int]) -> List[Card]:

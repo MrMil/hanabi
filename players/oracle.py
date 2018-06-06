@@ -3,9 +3,9 @@ from game import Card, Tokens, Rules
 from typing import NamedTuple, List, Tuple
 
 
-def oracle_player(state: None, log: List[NamedTuple], hands: List[List[Card]],
+def oracle_player(log: List[NamedTuple], hands: List[List[Card]],
                   rules: Rules, tokens: Tokens, slots: List[int],
-                  discard_pile: List[List[int]]) -> Tuple[None, NamedTuple]:
+                  discard_pile: List[List[int]]) -> Tuple:
     """
     Zvika and Ofer's oracle player
     """
@@ -21,7 +21,7 @@ def oracle_player(state: None, log: List[NamedTuple], hands: List[List[Card]],
             if playable_card is None or playable_card.data.rank < card.data.rank:
                 playable_card = card
     if playable_card is not None:
-        return state, Play.create(playable_card.id), 'playable'
+        return Play.create(playable_card.id), 'playable'
 
     def get_card_to_discard():
         # discard already played
@@ -62,20 +62,20 @@ def oracle_player(state: None, log: List[NamedTuple], hands: List[List[Card]],
     if tokens.clues < rules.max_tokens.clues:
         card, note = get_card_to_discard()
         if card is not None:
-            return state, Discard.create(card), 'pass/d/' + note
+            return Discard.create(card), 'pass/d/' + note
 
     # nothing useful to do
     # try to pass with useless clue
     if tokens.clues > 0:
         player = (my_id + 1) % len(hands)
         if hands[player]:
-            return state, Clue.create(player, 'suit', hands[player][0].data.suit), 'pass/c'
+            return Clue.create(player, 'suit', hands[player][0].data.suit), 'pass/c'
 
     # try to pass with false play
     if tokens.lives > 1:
         card, note = get_card_to_discard()
         if card is not None:
-            return state, Play.create(card), 'pass/p/' + note
+            return Play.create(card), 'pass/p/' + note
 
     # you have to throw something useful. try the farthest from the suit
     # look for an expandable card
@@ -99,7 +99,7 @@ def oracle_player(state: None, log: List[NamedTuple], hands: List[List[Card]],
 
     # throw by discard
     if tokens.clues < rules.max_tokens.clues:
-        return state, Discard.create(throw.id), 'throw/d' + note
+        return Discard.create(throw.id), 'throw/d' + note
 
     # throw by false play
-    return state, Play.create(throw.id), 'throw/p' + note
+    return Play.create(throw.id), 'throw/p' + note
