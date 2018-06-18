@@ -76,11 +76,27 @@ def humanlike_player(state, log, hands, rules, tokens, slots, discard_pile):
 
         return True
 
+    def is_playable(card):
+        return slots[card.data.suit] == card.data.rank
+
     def should_play_card(cards, cards_in_hand, hinted_cards, _slots=None, _discard_pile=None):
         if _slots is None:
             _slots = slots
         if _discard_pile is None:
             _discard_pile = discard_pile
+
+        # Play 2nd degree clues
+
+        def relative_position(that_player):
+            return (that_player - my_id) % len(hands)
+
+        for move in log[-len(hands) + 1:]:
+            if isinstance(move, ResolvedClue):
+                if move.player != my_id and relative_position(move.cur_player) > relative_position(move.player):
+                    hinted_card = max([card.id for card in move.cards])
+                    known_card = [card for card in hands[move.player] if card.id == hinted_card][0]
+                    if slots[known_card.data.suit] == known_card.data.rank - 1:
+                        return max(my_card_ids), 'Played 2nd degree card'
 
         hinted_cards = hinted_cards.intersection(cards_in_hand)
         definate_cards_to_play = set()
@@ -109,16 +125,16 @@ def humanlike_player(state, log, hands, rules, tokens, slots, discard_pile):
                     cards_in_highest_rank = set()
                 if cards[card_id].positive.rank == highest_rank:
                     cards_in_highest_rank.add(card_id)
-            return sorted(cards_in_highest_rank)[-1]  # play newest card
+            return sorted(cards_in_highest_rank)[-1], "Play 100% known card"
 
         if cards_to_play:
-            return sorted(cards_to_play)[-1]  # play newest card
+            return sorted(cards_to_play)[-1], "Play hinted at card"
 
-        return None
+        return None, None
 
     def what_will_player_play(cards, hand, player_id, clue, _slots, _discard_pile):
         cards, _hinted_cards = update_cards(cards, player_id, clue)
-        card_id = should_play_card(cards, [card.id for card in hand], _hinted_cards, _slots, _discard_pile)
+        card_id, reason = should_play_card(cards, [card.id for card in hand], _hinted_cards, _slots, _discard_pile)
         if card_id is not None:
             card = [card for card in hand if card.id == card_id][0]
             legal = is_play_legal(card.data.suit, card.data.rank, _slots)
@@ -144,12 +160,26 @@ def humanlike_player(state, log, hands, rules, tokens, slots, discard_pile):
 
     my_card_ids = [card.id for card in hands[my_id]]
 
-    card_to_play = should_play_card(state, my_card_ids, state_actions, slots, discard_pile)
+    card_to_play, reason = should_play_card(state, my_card_ids, state_actions, slots, discard_pile)
 
     if card_to_play is not None:   # Its better to play than hint
-        return state, Play.create(card_to_play), 'Played card'
+        return state, Play.create(card_to_play), reason
 
     if tokens.clues > 0:  # Its better to hint than discard
+        # If possible give 2nd degree clue
+        hintable_card = hands[(my_id + 1) % len(hands)][-1]
+        if is_playable(hintable_card):
+            player_id = (my_id + 2) % len(hands)
+            for card in hands[player_id]:
+                if card.data.suit == hintable_card.data.suit and card.data.rank == hintable_card.data.rank + 1:
+                    # suit clue
+                    if max([card.id for card in hands[player_id] if card.data.suit == hintable_card.data.suit]) \
+                            == card.id:
+                        return Clue.create(player_id, 'suit', card.data.suit), 'give 2nd degree suit clue'
+                    # rank clue
+                    if max([card.id for card in hands[player_id] if card.data.rank == hintable_card.data.rank + 1]) \
+                            == card.id:
+                        return Clue.create(player_id, 'rank', card.data.rank), 'give 2nd degree rank clue'
         foreseen_slots = list(slots)
         foreseen_state = dict(state)
 
@@ -158,7 +188,7 @@ def humanlike_player(state, log, hands, rules, tokens, slots, discard_pile):
             foreseen_state, is_legal, play = what_will_player_play(
                 foreseen_state, hands[player], player, None, foreseen_slots, discard_pile)
             player_state, player_hinted = update_cards(foreseen_state, player)
-            player_play = should_play_card(state, [card.id for card in hands[player]], player_hinted)
+            player_play, reason = should_play_card(state, [card.id for card in hands[player]], player_hinted)
             if player_play is not None:
                 card = [card for card in hands[player] if card.id == player_play][0]
 
